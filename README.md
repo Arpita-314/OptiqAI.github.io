@@ -20,13 +20,6 @@ Clone the repository and install dependencies:
 bash
 pip install -r requirements.txt
 
-Excellent — you’ve already got the foundation of a great README, but let’s transform it into an **industry-grade document** that feels professional, clear, and deployment-ready.
-
-Below is a fully rewritten, detailed README for **OptiqAI**, written in a style suitable for GitHub, corporate portfolio, or interview showcase.
-It includes complete setup, modular code structure, examples, explanations, and best practices (like MLflow logging, model registry, etc.).
-
----
-
 ## 🚀 Overview
 
 OptiqAI is designed for:
