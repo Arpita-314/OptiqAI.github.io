@@ -344,7 +344,52 @@ from trainer import OpticsTrainer
 import torch
 
 # Define your model (replace MyModel with your actual model class)
-model = MyModel()
+🧠 Model Architecture & Selection
+
+OptiqAI includes a Model Recommender System that automatically picks the best neural network for your data type and image size.
+This logic lives inside the ModelSelector class in models/architecture.py.
+
+🔹 How It Works
+
+When you run the main script, OptiqAI analyzes your input data — for example, whether it’s a complex optical field or an intensity image.
+
+Based on this, it recommends a suitable model and builds it automatically.
+
+You can also manually select a model if you prefer.
+
+🔹 Available Architectures
+Model	Description	Best For
+MyModel	A small 2-layer CNN used as a baseline	Quick testing or debugging
+FourierNet	A CNN designed for learning in the Fourier domain	Intensity-based optical data
+UNet2D	A U-Net style encoder–decoder	Amplitude & phase reconstruction
+OptiFormer	A lightweight Vision Transformer	Large, complex optical wavefronts
+🔹 Example
+from models.architecture import ModelSelector
+
+# Create the model selector
+selector = ModelSelector(data_shape=(256, 256), data_type="complex_field")
+
+# Automatically choose the best architecture
+recommended = selector.auto_recommend()
+print(f"Recommended model: {recommended}")
+
+# Build the selected model
+model = selector.build_model()
+print(model)
+
+
+Output example:
+
+Recommended model: unet2d
+UNet2D(
+  (enc1): Conv2d(1, 64, kernel_size=(3, 3), padding=(1, 1))
+  ...
+)
+
+🔹 Why This Matters
+
+This approach makes OptiqAI behave like a small AutoML system — it decides which architecture fits your data, builds it dynamically, and integrates it into the training pipeline.
+You can extend it easily by adding new models inside models/architecture.py.
 
 # Initialize trainer
 trainer = OpticsTrainer(model, wavelength=632.8e-9, pixel_size=5e-6)
