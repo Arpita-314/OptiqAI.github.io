@@ -1,0 +1,9 @@
+# Black-Scholes Model Requirements
+# Core dependencies for option pricing calculations
+
+numpy>=1.21.0
+scipy>=1.7.0
+
+# Optional: for development and testing
+pytest>=7.0.0
+
