@@ -159,10 +159,19 @@ class BlackScholesModel:
             return abs(calculated_price - market_price)
         
         try:
-            result = minimize_scalar(objective, bounds=(0.001, 5.0), method='bounded')
+            # Pass max_iter to minimize_scalar via options
+            # For 'bounded' method, maxiter controls maximum iterations
+            result = minimize_scalar(
+                objective, 
+                bounds=(0.001, 5.0), 
+                method='bounded',
+                options={'maxiter': max_iter}
+            )
+            # Check if optimization was successful (result.fun is the minimum value found)
             if result.fun < tolerance:
                 return result.x
-        except:
+        except Exception as e:
+            # If optimization fails (e.g., max_iter too low, invalid bounds), return None
             pass
         
         return None

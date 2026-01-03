@@ -139,47 +139,88 @@ class BlackScholesAgent:
         
         # Time to expiration
         time_patterns = [
-            r'(\d+\.?\d*)\s*(?:days?|d)',
-            r'(\d+\.?\d*)\s*(?:months?|m)',
-            r'(\d+\.?\d*)\s*(?:years?|y)',
-            r'T\s*[=:]\s*(\d+\.?\d*)',
-            r'time\s*(?:to|until)?\s*expiration\s*(?:is|:)?\s*(\d+\.?\d*)'
+            (r'(\d+\.?\d*)\s*(?:days?|d)', 'days'),
+            (r'(\d+\.?\d*)\s*(?:months?|m)', 'months'),
+            (r'(\d+\.?\d*)\s*(?:years?|y)', 'years'),
+            (r'T\s*[=:]\s*(\d+\.?\d*)', 'years'),  # Assume years for T= format
+            (r'time\s*(?:to|until)?\s*expiration\s*(?:is|:)?\s*(\d+\.?\d*)', 'years')  # Assume years if no unit specified
         ]
-        for pattern in time_patterns:
+        for pattern, unit in time_patterns:
             match = re.search(pattern, query_lower)
             if match:
                 value = float(match.group(1))
-                # Convert to years
-                if 'day' in query_lower or 'd' in query_lower:
+                # Convert to years based on the matched pattern, not the entire query
+                if unit == 'days':
                     value = value / 365
-                elif 'month' in query_lower or 'm' in query_lower:
+                elif unit == 'months':
                     value = value / 12
+                # 'years' unit requires no conversion
                 params['T'] = value
                 break
         
         # Risk-free rate
-        rate_patterns = [
+        # Patterns that explicitly mention "rate" typically use percentages
+        rate_patterns_percent = [
             r'risk[-\s]free\s*rate\s*(?:is|of|:)?\s*(\d+\.?\d*)\s*%?',
-            r'interest\s*rate\s*(?:is|of|:)?\s*(\d+\.?\d*)\s*%?',
-            r'r\s*[=:]\s*(\d+\.?\d*)\s*%?'
+            r'interest\s*rate\s*(?:is|of|:)?\s*(\d+\.?\d*)\s*%?'
         ]
-        for pattern in rate_patterns:
+        # Patterns like r= or r: are typically decimal format
+        rate_patterns_decimal = [
+            r'r\s*[=:]\s*(\d+\.?\d*)'
+        ]
+        
+        # Check percentage patterns first
+        for pattern in rate_patterns_percent:
             match = re.search(pattern, query_lower)
             if match:
-                params['r'] = float(match.group(1)) / 100
+                value = float(match.group(1))
+                # Check if % sign is present in the matched context
+                match_text = match.group(0)
+                if '%' in match_text or value > 1.0:  # If > 1.0, likely a percentage
+                    params['r'] = value / 100
+                else:
+                    params['r'] = value  # Already decimal
                 break
         
+        # Check decimal patterns if not found
+        if 'r' not in params:
+            for pattern in rate_patterns_decimal:
+                match = re.search(pattern, query_lower)
+                if match:
+                    params['r'] = float(match.group(1))  # Assume decimal format
+                    break
+        
         # Volatility
-        vol_patterns = [
-            r'volatility\s*(?:is|of|:)?\s*(\d+\.?\d*)\s*%?',
+        # Patterns that explicitly mention "volatility" typically use percentages
+        vol_patterns_percent = [
+            r'volatility\s*(?:is|of|:)?\s*(\d+\.?\d*)\s*%?'
+        ]
+        # Patterns like sigma= or σ= are typically decimal format
+        vol_patterns_decimal = [
             r'sigma\s*[=:]\s*(\d+\.?\d*)',
             r'σ\s*[=:]\s*(\d+\.?\d*)'
         ]
-        for pattern in vol_patterns:
+        
+        # Check percentage patterns first
+        for pattern in vol_patterns_percent:
             match = re.search(pattern, query_lower)
             if match:
-                params['sigma'] = float(match.group(1)) / 100
+                value = float(match.group(1))
+                # Check if % sign is present in the matched context
+                match_text = match.group(0)
+                if '%' in match_text or value > 1.0:  # If > 1.0, likely a percentage
+                    params['sigma'] = value / 100
+                else:
+                    params['sigma'] = value  # Already decimal
                 break
+        
+        # Check decimal patterns if not found
+        if 'sigma' not in params:
+            for pattern in vol_patterns_decimal:
+                match = re.search(pattern, query_lower)
+                if match:
+                    params['sigma'] = float(match.group(1))  # Assume decimal format
+                    break
         
         # Option type
         if 'call' in query_lower:
