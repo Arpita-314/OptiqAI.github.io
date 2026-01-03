@@ -1,4 +1,5 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Body, Path, Depends, Security
+from fastapi.security.api_key import APIKeyHeader
 from pydantic import BaseModel
 from typing import Dict, List
 from enum import Enum
@@ -6,14 +7,74 @@ import torch
 import optuna
 from abc import ABC, abstractmethod
 
-from simulation_interface import SimulationInterface
-from fdtd_simulation import FDTDSimulation
-from ray_tracing_simulation import RayTracingSimulation
-from meep_simulation import MEEPSimulation
-from data_management import DataManager
-from workflow_automation import WorkflowAutomation
+from experiment_db import SessionLocal, ExperimentResult
 
 app = FastAPI()
+
+@app.get("/")
+def read_root():
+    return {"status": "ok"}
+
+#fastapi for database systems
+@app.get("/results", dependencies=[Depends(verify_api_key)])
+def get_results():
+    session = SessionLocal()
+    results = session.query(ExperimentResult).all()
+    session.close()
+    return [ {"id": r.id, "name": r.name, "metric": r.metric, "notes": r.notes} for r in results ]
+
+# Add to main.py
+
+@app.post("/results", dependencies=[Depends(verify_api_key)])
+def save_result(
+    name: str = Body(...),
+    metric: float = Body(...),
+    notes: str = Body("")
+):
+    session = SessionLocal()
+    result = ExperimentResult(name=name, metric=metric, notes=notes)
+    session.add(result)
+    session.commit()
+    session.close()
+    return {"status": "saved"}
+
+#update endpoint
+from fastapi import Path
+
+@app.put("/results/{result_id}")
+def update_result(
+    result_id: int = Path(...),
+    name: str = Body(None),
+    metric: float = Body(None),
+    notes: str = Body(None)
+):
+    session = SessionLocal()
+    result = session.query(ExperimentResult).filter(ExperimentResult.id == result_id).first()
+    if not result:
+        session.close()
+        raise HTTPException(status_code=404, detail="Result not found")
+    if name is not None:
+        result.name = name
+    if metric is not None:
+        result.metric = metric
+    if notes is not None:
+        result.notes = notes
+    session.commit()
+    session.close()
+    return {"status": "updated"}
+
+#delete endpoint
+@app.delete("/results/{result_id}")
+def delete_result(result_id: int = Path(...)):
+    session = SessionLocal()
+    result = session.query(ExperimentResult).filter(ExperimentResult.id == result_id).first()
+    if not result:
+        session.close()
+        raise HTTPException(status_code=404, detail="Result not found")
+    session.delete(result)
+    session.commit()
+    session.close()
+    return {"status": "deleted"}
 
 # Define data models
 class SimulationType(str, Enum):
@@ -61,15 +122,24 @@ async def simulate(request: SimulationRequest):
     try:
         if request.simulation_type == SimulationType.FDTD:
             simulator = fdtd_simulator
+            # Validate required params
+            if not all(k in request.params for k in ("wavelength", "grid_size")):
+                raise HTTPException(status_code=422, detail="Missing 'wavelength' or 'grid_size' for FDTD simulation.")
         elif request.simulation_type == SimulationType.RAY_TRACING:
             simulator = ray_tracing_simulator
+            if not all(k in request.params for k in ("focal_length", "aperture")):
+                raise HTTPException(status_code=422, detail="Missing 'focal_length' or 'aperture' for Ray Tracing simulation.")
         elif request.simulation_type == SimulationType.MEEP:
             simulator = meep_simulator
+            if not all(k in request.params for k in ("wavelength", "resolution", "size_x", "size_y")):
+                raise HTTPException(status_code=422, detail="Missing one or more required parameters for MEEP simulation.")
         else:
-            raise ValueError("Invalid simulation type")
+            raise HTTPException(status_code=400, detail="Invalid simulation type")
 
         result = simulator.simulate(request.params)
         return {"result": result}
+    except HTTPException as e:
+        raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -140,7 +210,7 @@ class SimulationInterface(ABC):
         pass
 
 import torch
-from simulation_interface import SimulationInterface
+#from simulation_interface import SimulationInterface
 
 class FDTDSimulation(SimulationInterface):
     def __init__(self, device='cpu'):
@@ -161,7 +231,7 @@ class FDTDSimulation(SimulationInterface):
         except Exception as e:
             raise ValueError(f"FDTD Simulation Failed: {str(e)}")
 
-from simulation_interface import SimulationInterface
+#from simulation_interface import SimulationInterface
 
 class RayTracingSimulation(SimulationInterface):
     def __init__(self):
@@ -182,7 +252,7 @@ class RayTracingSimulation(SimulationInterface):
             raise ValueError(f"Ray Tracing Simulation Failed: {str(e)}")
 
 import numpy as np
-from simulation_interface import SimulationInterface
+#from simulation_interface import SimulationInterface
 
 class MEEPSimulation(SimulationInterface):
     def __init__(self):
@@ -301,8 +371,12 @@ class WorkflowAutomation:
         except Exception as e:
             raise ValueError(f"Workflow Execution Failed: {str(e)}")
 
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    window = MainWindow()
-    window.show()
-    sys.exit(app.exec_())
+#API key dependency
+
+API_KEY = "your-secret-api-key"
+api_key_header = APIKeyHeader(name="X-API-Key")
+
+def verify_api_key(api_key: str = Security(api_key_header)):
+    if api_key != API_KEY:
+        raise HTTPException(status_code=403, detail="Invalid API Key")
+

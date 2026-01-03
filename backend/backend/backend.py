@@ -10,27 +10,29 @@ from fdtd_simulation import FDTDSimulation
 from ray_tracing_simulation import RayTracingSimulation
 from data_management import DataManager
 from workflow_automation import WorkflowAutomation
+import fdtd_core  # Import the C++ extension module
+import meep_cpp  # Import the MEEP C++ module
+
+core = fdtd_core.FDTDCore()
+result = core.simulate(0.5, 100)
+print(result)
 
 # backend/fdtd_simulation.py
 import torch
 from simulation_interface import SimulationInterface
+from fdtd_core import FDTDCore
 
 class FDTDSimulation(SimulationInterface):
     def __init__(self, device='cpu'):
-        self.device = torch.device(device)
-
+        self.device = device
+        self.core = FDTDCore()
+        
     def simulate(self, params):
         """
-        Basic FDTD simulation using PyTorch.
-        Replace with your actual FDTD implementation.
+        Basic FDTD simulation using PyTorch and a performant C++ core.
         """
         try:
-            wavelength = torch.tensor(params['wavelength'], dtype=torch.float32, device=self.device)
-            grid_size = torch.tensor(params['grid_size'], dtype=torch.int32, device=self.device)
-
-            # Dummy calculation
-            result = wavelength * grid_size
-            return result.cpu().numpy()
+            return self.core.simulate(params['wavelength'], params['grid_size'])
         except Exception as e:
             raise ValueError(f"FDTD Simulation Failed: {str(e)}")
 
@@ -231,6 +233,16 @@ class MEEPSimulation(SimulationInterface):
 
         except Exception as e:
             raise ValueError(f"MEEP Simulation Failed: {str(e)}")
+
+from experiment_db import SessionLocal, ExperimentResult
+
+def save_experiment(name, metric, notes=""):
+    session = SessionLocal()
+    result = ExperimentResult(name=name, metric=metric, notes=notes)
+    session.add(result)
+    session.commit()
+    session.close()
+
 
 
 

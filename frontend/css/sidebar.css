@@ -1,0 +1,16 @@
+.left-panel {
+    width: 350px;
+    background: var(--bg-primary);
+    padding: 20px;
+    overflow-y: auto;
+    border-right: 1px solid var(--bg-tertiary);
+}
+
+@media (max-width: 768px) {
+    .left-panel {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid var(--bg-tertiary);
+        max-height: 40vh;
+    }
+}

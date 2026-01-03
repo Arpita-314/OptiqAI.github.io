@@ -1,0 +1,86 @@
+<div class="left-panel">
+    <!-- System Information Card -->
+    <div class="info-card">
+        <div class="card-title">
+            <span class="card-icon">💻</span>
+            System Information
+        </div>
+        <div class="system-info">
+            <div><b>Platform:</b> <span id="platform">Web Browser</span></div>
+            <div><b>Browser:</b> <span id="browser">Chrome</span></div>
+            <div><b>Screen:</b> <span id="screen">1920x1080</span></div>
+            <div><b>Memory:</b> <span id="memory">Available</span></div>
+            <div><b>WebGL:</b> <span id="webgl">Enabled</span></div>
+        </div>
+    </div>
+
+    <!-- GPU Acceleration Card -->
+    <div class="info-card">
+        <div class="card-title">
+            <span class="card-icon">🚀</span>
+            GPU Acceleration
+        </div>
+        <div id="cuda-status" class="cuda-status cuda-available">
+            <div style="color: var(--success);">
+                <b>✅ WebGL Available</b><br>
+                <b>Renderer:</b> <span id="gpu-renderer">WebGL 2.0</span><br>
+                <b>Status:</b> Ready for acceleration
+            </div>
+        </div>
+    </div>
+
+    <!-- Performance Monitor Card -->
+    <div class="info-card">
+        <div class="card-title">
+            <span class="card-icon">📊</span>
+            Performance Monitor
+        </div>
+        <div class="progress-container">
+            <div class="progress-label">
+                <span>CPU</span>
+                <span id="cpu-value">45%</span>
+            </div>
+            <div class="progress-bar">
+                <div id="cpu-progress" class="progress-fill" style="width: 45%;">45%</div>
+            </div>
+        </div>
+        <div class="progress-container">
+            <div class="progress-label">
+                <span>Memory</span>
+                <span id="mem-value">62%</span>
+            </div>
+            <div class="progress-bar">
+                <div id="memory-progress" class="progress-fill" style="width: 62%;">62%</div>
+            </div>
+        </div>
+        <div class="progress-container">
+            <div class="progress-label">
+                <span>GPU</span>
+                <span id="gpu-value">38°C</span>
+            </div>
+            <div class="progress-bar">
+                <div id="gpu-progress" class="progress-fill" style="width: 38%;">38°C</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Control Panel -->
+    <div class="info-card">
+        <div class="card-title">
+            <span class="card-icon">🎮</span>
+            Control Panel
+        </div>
+        <button id="initialize-engine-btn" class="control-button">
+            <span>🚀</span> Initialize Engine
+        </button>
+        <button id="run-analysis-btn" class="control-button">
+            <span>📊</span> Run Analysis
+        </button>
+        <button id="configure-settings-btn" class="control-button">
+            <span>🔧</span> Configure Settings
+        </button>
+        <button id="view-results-btn" class="control-button">
+            <span>📈</span> View Results
+        </button>
+    </div>
+</div>

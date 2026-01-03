@@ -1,11 +1,12 @@
-from fourierlab.UI.gui.main_window import MainWindow
 from PyQt5.QtWidgets import QApplication
 import sys
-import cupy as cp
+from src.fourierlab.UI.gui.main_window import MainWindow  # Note: MainWindow instead of FourierLabGUI
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    window = MainWindow()
+    app.setStyle('Fusion')  # Use Fusion style for better looking widgets
+    
+    window = MainWindow()  # Use the MainWindow class from your previous implementation
     window.show()
-    cp.show_config()
-    sys.exit(app.exec_()) 
+    
+    sys.exit(app.exec_())
