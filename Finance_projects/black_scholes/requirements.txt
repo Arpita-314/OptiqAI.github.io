@@ -1,0 +1,26 @@
+# Black-Scholes AI Agent Requirements
+# Renaissance Technologies - Option Pricing System
+
+# Core dependencies
+numpy>=1.21.0
+scipy>=1.7.0
+pydantic>=2.0.0
+
+# FastAPI backend
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+
+# AI/LLM dependencies
+transformers>=4.30.0
+torch>=2.0.0
+accelerate>=0.21.0
+safetensors>=0.4.0
+
+# Optional: for better performance
+# bitsandbytes>=0.41.0  # For quantized models
+
+# Development
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+

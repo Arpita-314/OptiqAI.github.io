@@ -11,6 +11,22 @@ tqdm>=4.62.0
 scipy>=1.7.0
 numba>=0.56.0
 
+# Hugging Face + LLM stack
+transformers>=4.30.0
+sentence-transformers>=2.2.2
+torch>=2.0.0
+accelerate>=0.21.0
+safetensors
+numpy
+tqdm
+
+# Optional / recommended for quantized models
+bitsandbytes
+
+# (Optional) voice support
+SpeechRecognition
+pyaudio   # note: may require OS-specific binary install; optional
+
 # Optional GPU dependencies
 # Uncomment these if you have an NVIDIA GPU and want to use CUDA
 # cupy-cuda12x>=12.0.0

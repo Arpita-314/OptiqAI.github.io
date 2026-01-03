@@ -1,0 +1,29 @@
+{
+  "ABCD": {
+    "name": "ABCD (Ray transfer) matrix",
+    "description": "Paraxial ray transfer (2x2) used for Gaussian beam/ray propagation.",
+    "when_to_use": "Paraxial systems: thin lenses, free space, mirrors (small angles).",
+    "matrix_form": "[[A, B], [C, D]]",
+    "example": "Free space L: [[1, L], [0, 1]]; Thin lens f: [[1,0],[-1/f,1]]",
+    "caveats": "Not valid for large angles or strongly diffractive systems."
+  },
+  "Jones": {
+    "name": "Jones matrix (2x2 complex)",
+    "description": "Represents polarization effects for coherent light.",
+    "when_to_use": "Coherent polarization systems (waveplates, polarizers).",
+    "example": "Half-wave plate at angle θ.",
+    "caveats": "Only for fully polarized, coherent light."
+  },
+  "Mueller": {
+    "name": "Mueller matrix (4x4 real)",
+    "description": "Represents polarization effects for partially polarized light.",
+    "when_to_use": "Use for depolarizing systems and intensity-level polarization measurements.",
+    "caveats": "Larger and less expressive for coherent phase."
+  },
+  "Fourier": {
+    "name": "Fourier transform (discrete matrix)",
+    "description": "Transforms spatial to frequency domain; used in diffraction and imaging.",
+    "when_to_use": "Fraunhofer/Fresnel diffraction, ptychography, holography.",
+    "caveats": "Sampling, zero-padding, and aliasing must be managed."
+  }
+}

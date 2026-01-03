@@ -371,6 +371,92 @@ class WorkflowAutomation:
         except Exception as e:
             raise ValueError(f"Workflow Execution Failed: {str(e)}")
 
+
+# -----------------------------
+# RECONSTRUCTION BACKEND FUNCTIONS
+# -----------------------------
+def tikhonov_reconstruction(A, b, lam=1e-2):
+    AtA = A.T @ A
+    Atb = A.T @ b
+    M = AtA + lam * np.eye(A.shape[1])
+    x = np.linalg.solve(M, Atb)
+    return x
+
+def least_squares(A, b):
+    x, *_ = np.linalg.lstsq(A, b, rcond=None)
+    return x
+
+def gradient_descent(A, b, lam=1e-2, steps=500, alpha=None):
+    n = A.shape[1]
+    x = np.zeros(n)
+    if alpha is None:
+        alpha = 1 / (np.linalg.norm(A, 2)**2 + lam)
+    for _ in range(steps):
+        grad = A.T @ (A @ x - b) + lam * x
+        x -= alpha * grad
+    return x
+
+def conjugate_gradient(A, b, lam=1e-2, tol=1e-6, maxiter=1000):
+    AtA = A.T @ A
+    Atb = A.T @ b
+    n = A.shape[1]
+    def matvec(v): return AtA @ v + lam * v
+
+    x = np.zeros(n)
+    r = Atb - matvec(x)
+    p = r.copy()
+    rsold = np.dot(r, r)
+
+    for _ in range(maxiter):
+        Ap = matvec(p)
+        alpha = rsold / (np.dot(p, Ap) + 1e-12)
+        x += alpha * p
+        r -= alpha * Ap
+        rsnew = np.dot(r, r)
+        if np.sqrt(rsnew) < tol:
+            break
+        p = r + (rsnew / (rsold + 1e-12)) * p
+        rsold = rsnew
+
+    return x
+
+# -----------------------------
+# HANDLER FUNCTION (what your GUI or buttons call)
+# -----------------------------
+def run_reconstruction(A, b, method="tikhonov", lam=1e-2):
+    if method == "tikhonov":
+        return tikhonov_reconstruction(A, b, lam)
+    elif method == "least_squares":
+        return least_squares(A, b)
+    elif method == "gradient_descent":
+        return gradient_descent(A, b, lam)
+    elif method == "cg":
+        return conjugate_gradient(A, b, lam)
+    else:
+        raise ValueError(f"Unknown method: {method}")
+
+# -----------------------------
+# EXAMPLE USAGE / TEST SECTION
+# -----------------------------
+if __name__ == "__main__":
+    # Simulate a small example
+    np.random.seed(0)
+    A = np.random.randn(200, 100)
+    x_true = np.sin(np.linspace(0, np.pi, 100))
+    b = A @ x_true + 0.05 * np.random.randn(200)
+
+    # Pretend user chooses a method and lambda
+    user_method = "tikhonov"    # could come from dropdown or CLI input
+    lam_value = 0.01
+
+    # Run the reconstruction
+    x_recon = run_reconstruction(A, b, user_method, lam_value)
+
+    # Display a quick check
+    print(f"Method: {user_method}")
+    print("First 5 reconstructed values:", x_recon[:5])
+    print("Reconstruction error:", np.linalg.norm(x_recon - x_true))
+    
 #API key dependency
 
 API_KEY = "your-secret-api-key"

@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QSize, pyqtSignal, QThread
 from PyQt5.QtGui import QColor, QPalette, QFont, QIcon, QPixmap
 import numpy as np
+from torch import layout
 
 class FourierLabGUI(QMainWindow):
     def __init__(self):
@@ -368,3 +369,14 @@ class FourierLabGUI(QMainWindow):
         if files:
             # Handle with your original file upload logic
             pass
+    
+        self.suggest_btn = QPushButton("Suggest Next Step")
+        self.suggest_btn.clicked.connect(self.suggest_next)
+        layout.addWidget(self.suggest_btn)
+
+        
+    
+    def suggest_next(self):
+        suggestion = self.assistant.suggest_next()
+        self.chat_output.append(f"OptiqAI Suggestion: {suggestion}\n")
+

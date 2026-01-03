@@ -16,6 +16,11 @@ import psutil
 from datetime import datetime
 from foaml.training.trainer import OpticsTrainer
 from foaml.models.my_model import MyModel  # Example import
+from PyQt6 import QtWidgets
+from core.ai_assistant.assistant import OptiqAssistant
+from core.optics_engine.transformations import MatrixTransformations
+from ui.main_window import OptiqMainWindow
+
 
 class SystemMonitorThread(QThread):
     """Background thread for system monitoring"""
@@ -533,6 +538,14 @@ class FourierLabMainWindow(QMainWindow):
             self.system_monitor_thread.terminate()
             self.system_monitor_thread.wait()
         event.accept()
+    
+    def main():
+    app = QtWidgets.QApplication(sys.argv)
+    assistant = OptiqAssistant()
+    optics = MatrixTransformations()
+    window = OptiqMainWindow(assistant, optics)
+    window.show()
+    sys.exit(app.exec())
 
 
 def main():
@@ -548,6 +561,175 @@ def main():
     window.show()
     
     sys.exit(app.exec_())
+
+self.ai_mentor = AIMentorWidget()
+self.addDockWidget(Qt.RightDockWidgetArea, self.ai_mentor)
+
+# gui/main_window.py
+from PyQt6.QtWidgets import (QMainWindow, QApplication, QWidget, QPushButton, QVBoxLayout, QTextEdit,
+                             QLabel, QHBoxLayout, QListWidget, QTabWidget, QLineEdit, QMessageBox)
+import sys, os, json
+from backend.optics_engine.optics_simulation import OpticsSimulation
+from backend.optics_engine.matrix_transformer import MatrixTransformer
+from backend.optics_engine.matrix_explainer import MatrixExplainer
+from backend.ai_engine.assistant import OptiqAIAssistant
+from backend.decision_framework.problem_tree import ProblemNode
+from backend.decision_framework.decision_matrix import DecisionMatrix
+from backend.decision_framework.summary_generator import generate_markdown_summary
+from backend.experiment_logger import make_run_dir, save_run_meta
+from utils.logger import setup_logger
+
+logger = setup_logger()
+
+class OptiqAIMain(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("OptiqAI v0.1")
+        self.resize(1000, 700)
+
+        # backend objects
+        self.sim = OpticsSimulation("Gaussian Demo")
+        self.transformer = MatrixTransformer()
+        self.explainer = MatrixExplainer()
+        self.assistant = OptiqAIAssistant()
+        
+        # UI layout
+        self.tabs = QTabWidget()
+        self.setCentralWidget(self.tabs)
+
+        # Tab: Simulation
+        self.tab_sim = QWidget(); sim_layout = QVBoxLayout()
+        self.run_btn = QPushButton("Run Gaussian Simulation")
+        self.run_btn.clicked.connect(self.run_sim)
+        self.vis_btn = QPushButton("Visualize Last")
+        self.vis_btn.clicked.connect(self.sim.visualize)
+        sim_layout.addWidget(self.run_btn); sim_layout.addWidget(self.vis_btn)
+        self.sim_log = QTextEdit(); self.sim_log.setReadOnly(True)
+        sim_layout.addWidget(self.sim_log)
+        self.tab_sim.setLayout(sim_layout)
+        self.tabs.addTab(self.tab_sim, "Simulation")
+
+        # Tab: AI Assistant
+        self.tab_ai = QWidget(); ai_layout = QVBoxLayout()
+        self.ai_input = QLineEdit(); self.ai_input.setPlaceholderText("Type a question (e.g., 'ABCD matrix')")
+        self.ask_btn = QPushButton("Ask Assistant")
+        self.ask_btn.clicked.connect(self.ask_assistant)
+        self.teach_input = QTextEdit(); self.teach_input.setPlaceholderText("Teach assistant (paste notes or equation)...")
+        self.teach_btn = QPushButton("Teach Assistant")
+        self.teach_btn.clicked.connect(self.teach_assistant)
+        ai_layout.addWidget(self.ai_input)
+        ai_layout.addWidget(self.ask_btn)
+        ai_layout.addWidget(QLabel("Teach / Add to memory:"))
+        ai_layout.addWidget(self.teach_input)
+        ai_layout.addWidget(self.teach_btn)
+        self.ai_out = QTextEdit(); self.ai_out.setReadOnly(True)
+        ai_layout.addWidget(self.ai_out)
+        self.tab_ai.setLayout(ai_layout)
+        self.tabs.addTab(self.tab_ai, "AI Assistant")
+
+        # Tab: Decision
+        self.tab_dec = QWidget(); dec_layout = QVBoxLayout()
+        self.dec_list = QListWidget()
+        self.new_dec_btn = QPushButton("Run Example Decision: choose denoising method")
+        self.new_dec_btn.clicked.connect(self.run_decision_example)
+        dec_layout.addWidget(self.new_dec_btn)
+        dec_layout.addWidget(self.dec_list)
+        self.tab_dec.setLayout(dec_layout)
+        self.tabs.addTab(self.tab_dec, "Decision Framework")
+
+        # Tab: Matrix Companion
+        self.tab_mat = QWidget(); mat_layout = QVBoxLayout()
+        self.mat_input = QLineEdit(); self.mat_input.setPlaceholderText("Enter matrix key to explain (ABCD, Jones, Mueller, Fourier)")
+        self.mat_btn = QPushButton("Explain Matrix")
+        self.mat_btn.clicked.connect(self.explain_matrix)
+        self.mat_out = QTextEdit(); self.mat_out.setReadOnly(True)
+        self.mat_of_day = QPushButton("Matrix of the Day")
+        self.mat_of_day.clicked.connect(self.show_matrix_of_day)
+        mat_layout.addWidget(self.mat_input); mat_layout.addWidget(self.mat_btn); mat_layout.addWidget(self.mat_of_day); mat_layout.addWidget(self.mat_out)
+        self.tab_mat.setLayout(mat_layout)
+        self.tabs.addTab(self.tab_mat, "Matrix Companion")
+
+        # Run list + persistence buttons
+        bottom = QWidget(); bottom_layout = QHBoxLayout()
+        self.save_run_btn = QPushButton("Save example run (log)")
+        self.save_run_btn.clicked.connect(self.save_example_run)
+        bottom_layout.addWidget(self.save_run_btn)
+        bottom.setLayout(bottom_layout)
+        sim_layout.addWidget(bottom)
+
+    # Simulation handlers
+    def run_sim(self):
+        res = self.sim.run_gaussian_beam(waist=0.8)
+        self.sim_log.append("Ran Gaussian simulation (waist=0.8). Results stored.")
+        # brief summary
+        self.sim_log.append(f"Result length: {len(res['x'])}")
+
+    # AI assistant handlers
+    def ask_assistant(self):
+        q = self.ai_input.text().strip()
+        if not q:
+            QMessageBox.warning(self, "Empty query", "Please type a question.")
+            return
+        ans = self.assistant.ask(q)
+        self.ai_out.append(f"Q: {q}\nA: {ans}\n---")
+
+    def teach_assistant(self):
+        txt = self.teach_input.toPlainText().strip()
+        if not txt:
+            QMessageBox.warning(self, "Empty", "Provide text to teach.")
+            return
+        self.assistant.teach(txt)
+        self.ai_out.append("Added to assistant memory.\n")
+
+    # Decision example
+    def run_decision_example(self):
+        options = ["Classical Tikhonov", "Small CNN", "PINN hybrid"]
+        criteria = ["Accuracy", "Runtime", "Data required", "Explainability"]
+        weights = [0.4, 0.2, 0.2, 0.2]
+        dm = DecisionMatrix(options, criteria, weights)
+        # fill scores (0-1) — example heuristic
+        # Classical: accurate, fast, low data, high explainability
+        dm.set_score(0,0,0.7); dm.set_score(0,1,0.9); dm.set_score(0,2,0.9); dm.set_score(0,3,0.9)
+        # CNN: potentially accurate, medium runtime, high data, low explainability
+        dm.set_score(1,0,0.8); dm.set_score(1,1,0.5); dm.set_score(1,2,0.2); dm.set_score(1,3,0.3)
+        # PINN: accurate + physics, slower, medium data, medium explainability
+        dm.set_score(2,0,0.85); dm.set_score(2,1,0.4); dm.set_score(2,2,0.5); dm.set_score(2,3,0.6)
+        opt, score, all_scores = dm.recommend()
+        self.dec_list.addItem(f"Recommendation: {opt} (score={score:.3f})")
+        # save summary
+        matrix_dict = {"options": options, "criteria": criteria, "weights": weights, "scores": all_scores.tolist()}
+        rec = {"choice": opt, "score": score}
+        path = generate_markdown_summary("Denoising Decision", matrix_dict, rec, outdir="runs")
+        self.dec_list.addItem(f"Saved summary to {path}")
+
+    # Matrix companion handlers
+    def explain_matrix(self):
+        key = self.mat_input.text().strip()
+        if not key:
+            QMessageBox.warning(self, "Enter key", "Enter ABCD, Jones, Mueller, or Fourier")
+            return
+        info = self.explainer.explain(key)
+        self.mat_out.setText(json.dumps(info, indent=2))
+
+    def show_matrix_of_day(self):
+        import random
+        keys = list(self.explainer.lib.keys())
+        key = random.choice(keys)
+        info = self.explainer.explain(key)
+        self.mat_out.setText(f"Matrix of the Day: {key}\n\n" + json.dumps(info, indent=2))
+
+    # persistence example
+    def save_example_run(self):
+        run_dir = make_run_dir(prefix="example")
+        meta = {"name":"example run", "sim_meta": self.sim.meta}
+        save_run_meta(run_dir, meta)
+        QMessageBox.information(self, "Saved", f"Run saved to {run_dir}")
+
+def run_gui():
+    app = QApplication(sys.argv)
+    win = OptiqAIMain()
+    win.show()
+    sys.exit(app.exec())
 
 
 if __name__ == "__main__":
