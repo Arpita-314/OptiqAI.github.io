@@ -4,7 +4,7 @@ The "Correct-by-Construct" AI Copilot for Photonic Integrated Circuits (PICs).
 📖 The Manifesto
 "Why are we still designing light like it's 1998?"
 
-I have spent over 10 years in the photonics industry. The hardware is futuristic—light-speed compute, LiDAR, biosensors—but the software we use to build it is stuck in the past. We are forcing curvilinear physics into "Manhattan" (90-degree) digital electronic constraints. We spend hours manually dragging waveguide control points, fighting with GDS layer maps, and waiting days for simulations to tell us what we already suspected: it won't work.
+The hardware is futuristic—light-speed compute, LiDAR, biosensors—but the software we use to build it is stuck in the past. We are forcing curvilinear physics into "Manhattan" (90-degree) digital electronic constraints. We spend hours manually dragging waveguide control points, fighting with GDS layer maps, and waiting days for simulations to tell us what we already suspected: it won't work.
 
 PhotonPilot is the answer. It is an open initiative to build the first Generative Design Suite for Photonics that puts AI to work on the physics, automating the "boring parts" so engineers can focus on architecture.
 
