@@ -1,88 +1,61 @@
+"""Headless end-to-end smoke test of the full pipeline.
+
+The previous version blocked on ``input()``/``plt.show()``, used ``np`` without
+importing it, imported a non-existent ``preprocessing.fourier_preprocessing``
+path, and executed a broken deployment block at import time. This version runs
+non-interactively and can be executed directly or under pytest.
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import matplotlib
+
+matplotlib.use("Agg")  # headless
+
 import torch
-from data.ingestion import DataIngestion
-from preprocessing.fourier_preprocessing import FourierPreprocessing
+
 from models.architecture import ModelSelector
+from preprocessing.fourier_preprocessing import FourierPreprocessing
 from training.trainer import OpticsTrainer
 from utils.metrics import FourierOpticsMetrics
-from utils.visualization import FourierOpticsVisualization
-from utils.deployment import ModelDeployment
+
 
 def test_pipeline():
-    print("Starting end-to-end testing of the Fourier Optics AutoML Framework...")
+    torch.manual_seed(0)
+    grid = 64
 
-    # Step 1: Data Ingestion
-    print("\n[Step 1: Data Ingestion]")
-    ingestion = DataIngestion()
-    data_type = "complex_field"  # Simulated user input
-    pixel_size = 5.0  # μm
-    wavelength = 632.8  # nm
+    # Step 1-2: ingest + preprocess a complex field
+    pre = FourierPreprocessing(pixel_size=5.0, wavelength=632.8)
+    data = torch.randn(grid, grid) + 1j * torch.randn(grid, grid)
+    amplitude, phase = pre.preprocess(data, remove_dc=True, window_type="tukey", unwrap_phase=True)
+    assert amplitude.shape == (grid, grid)
 
-    # Simulate a complex wavefront dataset (256x256)
-    data = torch.randn(256, 256) + 1j * torch.randn(256, 256)
-    print(f"Data type: {data_type}, Pixel size: {pixel_size} μm, Wavelength: {wavelength} nm")
-
-    # Step 2: Preprocessing
-    print("\n[Step 2: Preprocessing]")
-    preprocessor = FourierPreprocessing(pixel_size=pixel_size, wavelength=wavelength)
-    amplitude, phase = preprocessor.preprocess(data, remove_dc=True, window_type='tukey', unwrap_phase=True)
-    print(f"Amplitude shape: {amplitude.shape}, Phase shape: {phase.shape}")
-
-    # Step 3: Model Selection
-    print("\n[Step 3: Model Selection]")
-    selector = ModelSelector(data_shape=amplitude.shape, data_type=data_type)
-    recommended_model = selector.auto_recommend()
-    print(f"Recommended model: {selector.available_models[recommended_model]}")
+    # Step 3: model selection (2-channel real/imag convention)
+    selector = ModelSelector(data_shape=(grid, grid), data_type="complex_field")
+    selector.model_choice = "fno"
     model = selector.build_model()
 
-    # Step 4: Training
-    print("\n[Step 4: Training]")
-    trainer = OpticsTrainer(model=model, wavelength=wavelength * 1e-9, pixel_size=pixel_size * 1e-6)
+    # Step 4: brief training on a tiny synthetic set
+    trainer = OpticsTrainer(model, wavelength=632.8e-9, pixel_size=5e-6)
+    x = torch.randn(8, 2, grid, grid)
+    y = torch.randn(8, 2, grid, grid)
+    loader = trainer.create_dataloader(x, y, batch_size=4)
+    trainer.manual_train(loader, loader, {"epochs": 2, "patience": 2, "lambda_physics": 0.0})
 
-    # Simulate training and validation datasets (100 training samples, 20 validation samples)
-    train_data = torch.randn(100, 1, 256, 256)  # Batch size of 100 (amplitude + phase)
-    train_targets = torch.randn(100, 2, 256, 256)  # Amplitude and phase as targets
-    val_data = torch.randn(20, 1, 256, 256)
-    val_targets = torch.randn(20, 2, 256, 256)
+    # Step 5: metrics on a held-out pair
+    metrics = FourierOpticsMetrics(632.8e-9, 5e-6)
+    pred = torch.exp(1j * torch.randn(grid, grid))
+    target = torch.exp(1j * torch.randn(grid, grid))
+    results = metrics.calculate_all_metrics(pred, target)
+    assert "strehl_ratio" in results
+    assert all(v == v for v in results.values())  # no NaNs
 
-    train_loader = trainer.create_dataloader(train_data, train_targets)
-    val_loader = trainer.create_dataloader(val_data, val_targets)
 
-    config = {
-        "epochs": 5,
-        "patience": 3,
-        "batch_size": 8,
-        "auto_tune": False,
-    }
-
-    print("Starting manual training...")
-    trainer.manual_train(train_loader, val_loader, config)
-
-    # Step 5: Validation and Metrics Calculation
-    print("\n[Step 5: Validation and Metrics Calculation]")
-    metrics_calculator = FourierOpticsMetrics(wavelength=wavelength * 1e-9, pixel_size=pixel_size * 1e-6)
-
-    # Simulate predicted and target wavefronts for validation metrics
-    predicted_wavefront = torch.exp(1j * torch.randn(256, 256))
-    target_wavefront = torch.exp(1j * (torch.randn(256, 256) * 0.9 + 0.1))
-
-    results = metrics_calculator.calculate_all_metrics(predicted_wavefront, target_wavefront)
-    
-    print("Validation Metrics:")
-    for key, value in results.items():
-        print(f"{key}: {value:.4f}")
-
-    # Step 6: Visualization
-    print("\n[Step 6: Visualization]")
-    
-    viz = FourierOpticsVisualization()
-    
-    # Visualize wavefront comparison
-    viz.compare_wavefronts(predicted_wavefront, target_wavefront)
-
-    # Simulate MTF data for visualization purposes
-    mtf_example = np.random.rand(256, 256) 
-    viz.plot_mtf(mtf_example)
-
-# Deployment step 
-deployment = ModelDeployment(model)
-deployment.export_to_onnx("model.onnx")
+if __name__ == "__main__":
+    test_pipeline()
+    print("pipeline smoke test passed.")

@@ -1,123 +1,106 @@
+"""End-to-end demo of the Fourier-Optics AutoML framework.
+
+Rewritten to actually run. The previous ``main.py`` had a syntax error (a
+dedented block mid-file), imported modules that did not exist
+(``preprocessing.fourier_preprocessing`` when the file was ``preprocessing.py``,
+``data.ingestion`` when the file was ``data/data/ingestion.py``), used ``np``
+without importing it, and blocked on ``input()`` everywhere.
+
+This version is non-interactive by default and demonstrates a *meaningful*
+surrogate task: an FNO learns to emulate free-space angular-spectrum
+propagation. Run:
+
+    python main/main.py            # from the foaml/ directory
+    python main/main.py --epochs 20
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+
+# make the flat intra-package imports resolve when run as a script
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import torch
-from data.ingestion import DataIngestion
-from preprocessing.fourier_preprocessing import FourierPreprocessing
+
 from models.architecture import ModelSelector
-from training.trainer import OpticsTrainer
-from utils.deployment import ModelDeployment
-from utils.visualization import FourierOpticsVisualization
+from optics.propagator import AngularSpectrum2d
+from training.trainer import OpticsTrainer, to_complex
+from utils.metrics import FourierOpticsMetrics
+
+
+def make_dataset(n_samples: int, grid: int, propagator: AngularSpectrum2d):
+    """Random smooth complex fields and their true propagated counterparts.
+
+    Represented as 2-channel (real, imag) tensors so a single convention flows
+    through the whole pipeline.
+    """
+    # low-pass random fields (smooth, band-limited, physically reasonable inputs)
+    spec = torch.randn(n_samples, grid, grid, dtype=torch.complex64)
+    kk = torch.fft.fftfreq(grid)
+    mask = (kk[:, None] ** 2 + kk[None, :] ** 2) < 0.05**2
+    fields = torch.fft.ifft2(torch.fft.fft2(spec) * mask)
+    fields = fields / fields.abs().amax(dim=(-2, -1), keepdim=True)
+
+    with torch.no_grad():
+        targets = propagator(fields.to(torch.complex128)).to(torch.complex64)
+
+    def to2ch(z):
+        return torch.stack([z.real, z.imag], dim=1).float()
+
+    return to2ch(fields), to2ch(targets)
+
 
 def main():
-    print("Welcome to Fourier Optics AutoML Framework")
-    
-    # Initialize data ingestion
-    ingestion = DataIngestion()
-    
-    # Get user input
-    data_type, pixel_size, wavelength = ingestion.get_user_input()
-    
-    # Here you would typically load your data
-    # data = ingestion.load_data('path/to/your/data.mat')
-    
-    # For demonstration, let's create some dummy data
-    data = torch.randn(256, 256) + 1j * torch.randn(256, 256)
-    
-    print("Data ingestion complete.")
-    
-    # Initialize preprocessing
-    preprocessor = FourierPreprocessing(pixel_size=pixel_size, wavelength=wavelength)
-    
-    # Preprocess the data
-    if data_type == 'complex_field':
-        amplitude, phase = preprocessor.preprocess(data, remove_dc=True, window_type='tukey', unwrap_phase=True)
-        print(f"Preprocessed amplitude shape: {amplitude.shape}")
-        print(f"Preprocessed phase shape: {phase.shape}")
-    else:
-        preprocessed_data = preprocessor.preprocess(data, remove_dc=True, window_type='tukey')
-        print(f"Preprocessed data shape: {preprocessed_data.shape}")
-    
-    print("Preprocessing complete.")
-    
-    # Model Selection
-    selector = ModelSelector(data_shape=amplitude.shape, data_type=data_type)
-    
-    # Auto-recommend first
-    recommended_model = selector.auto_recommend()
-    print(f"\nRecommended model: {selector.available_models[recommended_model]}")
-    
-    # User interaction
-    use_recommended = input("Use recommended model? (y/n): ").lower()
-    if use_recommended == 'y':
-        selector.model_choice = recommended_model
-    else:
-        selector.get_user_preferences()
-    
-    # Build model
+    parser = argparse.ArgumentParser(description="Fourier-Optics AutoML demo")
+    parser.add_argument("--epochs", type=int, default=10)
+    parser.add_argument("--grid", type=int, default=64)
+    parser.add_argument("--n-train", type=int, default=64)
+    parser.add_argument("--n-val", type=int, default=16)
+    parser.add_argument("--wavelength", type=float, default=1550e-9)
+    parser.add_argument("--pixel-size", type=float, default=0.5e-6)
+    parser.add_argument("--distance", type=float, default=20e-6)
+    args = parser.parse_args()
+
+    print("== Fourier-Optics AutoML: learning the propagation operator ==")
+
+    propagator = AngularSpectrum2d(
+        wavelength=args.wavelength, dx=args.pixel_size, distance=args.distance
+    )
+    train_x, train_y = make_dataset(args.n_train, args.grid, propagator)
+    val_x, val_y = make_dataset(args.n_val, args.grid, propagator)
+    print(f"dataset: train {tuple(train_x.shape)} -> {tuple(train_y.shape)}")
+
+    selector = ModelSelector(data_shape=(args.grid, args.grid), data_type="complex_field")
+    print(f"auto-recommended model: {selector.available_models[selector.auto_recommend()]}")
+    selector.model_choice = "fno"
     model = selector.build_model()
-    
-    print(f"\nSelected model architecture:\n{model}")
-    print("Next steps: Training and optimization")
 
-    # Training setup
-    trainer = OpticsTrainer(model, wavelength, pixel_size)
-    
-    # Create sample data (replace this with your actual data)
-    train_data = torch.randn(100, 1, 256, 256)  # Batch, channels, height, width
-    train_targets = torch.randn(100, 2, 256, 256)  # Amplitude + phase
-    val_data = torch.randn(20, 1, 256, 256)
-    val_targets = torch.randn(20, 2, 256, 256)
-    
-    train_loader = trainer.create_dataloader(train_data, train_targets, batch_size=8)
-    val_loader = trainer.create_dataloader(val_data, val_targets, batch_size=8, shuffle=False)
-    
-    # Get user settings
-    config = trainer.get_user_settings()
-    
-    if config["auto_tune"]:
-        print("Running hyperparameter optimization...")
-        trainer.auto_tune(train_loader, val_loader)
-    else:
-        print("Starting manual training...")
-        trainer.manual_train(train_loader, val_loader, config)
-    
-    print("Training complete. Best model weights saved.")
-    
-    # Deployment setup
-    print("Next steps: Validation and deployment")
+    trainer = OpticsTrainer(model, wavelength=args.wavelength, pixel_size=args.pixel_size)
+    train_loader = trainer.create_dataloader(train_x, train_y, batch_size=8)
+    val_loader = trainer.create_dataloader(val_x, val_y, batch_size=8, shuffle=False)
 
-deployment = ModelDeployment(model)
-deployment.deploy_summary()
-    
-# Example input for tracing during export (replace with actual input shape)
-example_input = torch.randn(1, 1, 256, 256)  # Batch size of 1
-    
-# Get user choice for deployment format
-deploy_choice = input("Choose deployment format (torchscript/onnx/both): ").lower()
-    
-if deploy_choice == "torchscript" or deploy_choice == "both":
-    deployment.export_to_torchscript(example_input)
-    
-if deploy_choice == "onnx" or deploy_choice == "both":
-    deployment.export_to_onnx(example_input)
-    
-print("\nDeployment complete. Models exported successfully.")
+    start_loss, _ = trainer.validate(val_loader)
+    trainer.manual_train(
+        train_loader, val_loader,
+        {"epochs": args.epochs, "patience": args.epochs, "lambda_physics": 0.05, "lr": 3e-3},
+    )
+    end_loss, phase_rmse = trainer.validate(val_loader)
+    print(f"val loss: {start_loss:.4f} -> {end_loss:.4f} | phase RMSE {phase_rmse:.4f}")
 
-print("Training complete. Best model weights saved.")
-    
-    # Validation and visualization setup
-    print("\nNext steps: Visualization")
-    
-    viz = FourierOpticsVisualization()
-    
-    # Simulate validation outputs for visualization purposes
-    predicted_wavefront = torch.exp(1j * torch.randn(256, 256))  # Replace with actual model predictions
-    target_wavefront = torch.exp(1j * torch.randn(256, 256))     # Replace with validation targets
-    
-    # Visualize results
-    viz.compare_wavefronts(predicted_wavefront, target_wavefront)
+    # honest metric read on one held-out example
+    metrics = FourierOpticsMetrics(args.wavelength, args.pixel_size)
+    with torch.no_grad():
+        pred = to_complex(model(val_x[:1]))[0]
+        target = to_complex(val_y[:1])[0]
+    results = metrics.calculate_all_metrics(pred, target)
+    print("held-out metrics:")
+    for k, v in results.items():
+        print(f"  {k}: {v:.4f}")
+    print("done.")
 
-    # Simulate MTF data for visualization purposes
-    mtf_example = np.random.rand(256, 256)  # Replace with actual MTF data from metrics module
-    viz.plot_mtf(mtf_example)
-    
+
 if __name__ == "__main__":
     main()
